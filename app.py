@@ -7,7 +7,7 @@ import uuid, re, os
 
 app = FastAPI()
 
-# Serve folder /audio như static files
+# Serve static files
 app.mount("/audio", StaticFiles(directory="audio"), name="audio")
 
 SUPPORTED_LANGS = [
@@ -17,41 +17,57 @@ SUPPORTED_LANGS = [
     'su','sv','sw','ta','te','th','tl','tr','uk','ur','vi','zh-CN','zh-TW'
 ]
 
-class TTSRequest(BaseModel):
+
+# -------- FIX REQUEST MODEL --------
+class TextItem(BaseModel):
     text: str
-    lang: str | None = None
+    lang: str | None = None  # có thể null → auto detect
 
-@app.post("/tts")
-async def text_to_speech(req: TTSRequest, request: Request):
-    text = req.text
 
-    # Auto detect
-    if req.lang:
-        lang = req.lang
-    else:
+class TTSRequest(BaseModel):
+    texts: list[TextItem]
+
+
+# -------- FUNCTION TTS --------
+def convert_text_to_speech(text: str, lang: str | None, base_url: str):
+    
+    # Auto detect language nếu lang = None hoặc chuỗi rỗng
+    if not lang:
         try:
             lang = detect(text)
-            if lang == "no":
-                if re.fullmatch(r"[A-Za-z0-9 ,.!?']+", text):
-                    lang = "en"
+            if lang == "no" and re.fullmatch(r"[A-Za-z0-9 ,.!?']+", text):
+                lang = "en"
         except:
             return {"error": "Không thể nhận diện ngôn ngữ."}
 
     if lang not in SUPPORTED_LANGS:
         lang = "en"
 
-    # Tạo file mp3
     filename = f"{uuid.uuid4()}.mp3"
     filepath = os.path.join("audio", filename)
 
     tts = gTTS(text=text, lang=lang)
     tts.save(filepath)
 
-    # Lấy URL base (http://localhost:8000)
-    base_url = str(request.base_url).rstrip("/")
-
-    # Trả FULL URL
     return {
         "detected_language": lang,
         "audio_url": f"{base_url}/audio/{filename}"
     }
+
+
+# -------- ROUTE API --------
+@app.post("/tts")
+async def text_to_speech(req: TTSRequest, request: Request):
+
+    if not os.path.exists("audio"):
+        os.makedirs("audio")
+
+    base_url = str(request.base_url).rstrip("/")
+
+    results = []
+
+    for item in req.texts:
+        result = convert_text_to_speech(item.text, item.lang, base_url)
+        results.append(result)
+
+    return {"results": results}
