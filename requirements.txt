@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+gtts
+langdetect
+protobuf==3.20.*
