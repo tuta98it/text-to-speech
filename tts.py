@@ -1,8 +1,15 @@
+from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from gtts import gTTS
 from langdetect import detect
-import uuid
+import uuid, re, os
 
-# Danh sách ngôn ngữ gTTS hỗ trợ
+app = FastAPI()
+
+# Serve folder /audio như static files
+app.mount("/audio", StaticFiles(directory="audio"), name="audio")
+
 SUPPORTED_LANGS = [
     'af','ar','bn','bs','ca','cs','cy','da','de','el','en','eo','es','et','fi',
     'fr','gu','hi','hr','hu','id','is','it','ja','jw','km','kn','ko','la','lv',
@@ -10,29 +17,41 @@ SUPPORTED_LANGS = [
     'su','sv','sw','ta','te','th','tl','tr','uk','ur','vi','zh-CN','zh-TW'
 ]
 
-# ====== NHẬP TEXT ======
-text = input("Nhập đoạn text cần đọc thành tiếng: ")
+class TTSRequest(BaseModel):
+    text: str
+    lang: str | None = None
 
-# ====== AUTO DETECT LANGUAGE ======
-try:
-    lang = detect(text)
-    if lang == "no":
-        if re.fullmatch(r"[A-Za-z0-9 ,.!?']+", text):
-            lang = "en"
-    print(f"Ngôn ngữ phát hiện: {lang}")
-except:
-    print("Không thể nhận diện ngôn ngữ.")
-    exit()
+@app.post("/tts")
+async def text_to_speech(req: TTSRequest, request: Request):
+    text = req.text
 
-# ====== CHECK NGÔN NGỮ HỖ TRỢ ======
-if lang not in SUPPORTED_LANGS:
-    print(f"⚠ gTTS không hỗ trợ ngôn ngữ '{lang}'. Tự chuyển sang tiếng Anh (en).")
-    lang = "en"
+    # Auto detect
+    if req.lang:
+        lang = req.lang
+    else:
+        try:
+            lang = detect(text)
+            if lang == "no":
+                if re.fullmatch(r"[A-Za-z0-9 ,.!?']+", text):
+                    lang = "en"
+        except:
+            return {"error": "Không thể nhận diện ngôn ngữ."}
 
-# ====== TẠO AUDIO từ thư viện gTTS ======
-filename = f"{uuid.uuid4()}.mp3"
-tts = gTTS(text=text, lang=lang)
-tts.save(filename)
+    if lang not in SUPPORTED_LANGS:
+        lang = "en"
 
-print(f"Đã tạo file âm thanh: {filename}")
-print("Mở file .mp3 để nghe.")
+    # Tạo file mp3
+    filename = f"{uuid.uuid4()}.mp3"
+    filepath = os.path.join("audio", filename)
+
+    tts = gTTS(text=text, lang=lang)
+    tts.save(filepath)
+
+    # Lấy URL base (http://localhost:8000)
+    base_url = str(request.base_url).rstrip("/")
+
+    # Trả FULL URL
+    return {
+        "detected_language": lang,
+        "audio_url": f"{base_url}/audio/{filename}"
+    }

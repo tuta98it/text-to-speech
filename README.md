@@ -1,1 +1,1 @@
-# text-to-speech
+# text-to-speech là dự án chuyển tổi đoạn text thành giọng nói
