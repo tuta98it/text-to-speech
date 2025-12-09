@@ -4,7 +4,8 @@ from pydantic import BaseModel
 from gtts import gTTS
 from langdetect import detect
 import uuid, re, os
-
+from langdetect import detect
+import subprocess
 app = FastAPI()
 
 # Serve static files
@@ -22,6 +23,7 @@ SUPPORTED_LANGS = [
 class TextItem(BaseModel):
     text: str
     lang: str | None = None  # có thể null → auto detect
+    speed: float | None = 1.0 # tốc độ phát âm (0.5 - 2.0)
 
 
 class TTSRequest(BaseModel):
@@ -29,9 +31,8 @@ class TTSRequest(BaseModel):
 
 
 # -------- FUNCTION TTS --------
-def convert_text_to_speech(text: str, lang: str | None, base_url: str):
-    
-    # Auto detect language nếu lang = None hoặc chuỗi rỗng
+def convert_text_to_speech(text: str, lang: str | None, speed: float | None, base_url: str):
+    # Auto-detect language nếu lang = None hoặc chuỗi rỗng
     if not lang:
         try:
             lang = detect(text)
@@ -43,11 +44,34 @@ def convert_text_to_speech(text: str, lang: str | None, base_url: str):
     if lang not in SUPPORTED_LANGS:
         lang = "en"
 
+    # Validate speed
+    if speed is None:
+        speed = 1.0
+    if speed <= 0:
+        speed = 1.0
+
     filename = f"{uuid.uuid4()}.mp3"
     filepath = os.path.join("audio", filename)
 
-    tts = gTTS(text=text, lang=lang)
+    # Tạo audio bằng gTTS (không có tham số speed)
+    tts = gTTS(text=text, lang=lang, slow=False)
     tts.save(filepath)
+
+    # Nếu speed != 1 thì chỉnh tốc độ
+    if speed != 1.0:
+        temp_output = filepath.replace(".mp3", "_tmp.mp3")
+
+        # Chạy ffmpeg filter: atempo = tốc độ
+        subprocess.run([
+            "ffmpeg", "-i", filepath,
+            "-filter:a", f"atempo={speed}",
+            "-vn",
+            temp_output,
+            "-y"
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # Ghi đè file cũ bằng file đã chỉnh tốc độ
+        os.replace(temp_output, filepath)
 
     return {
         "detected_language": lang,
@@ -67,7 +91,7 @@ async def text_to_speech(req: TTSRequest, request: Request):
     results = []
 
     for item in req.texts:
-        result = convert_text_to_speech(item.text, item.lang, base_url)
+        result = convert_text_to_speech(item.text, item.lang, item.speed, base_url)
         results.append(result)
 
     return {"results": results}
