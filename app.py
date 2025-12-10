@@ -36,21 +36,24 @@ class TTSRequest(BaseModel):
 def generate_audio_path():
     now = datetime.now()
 
-    # folder structure: audio/YYYY/MM/DD/
+    year = now.strftime("%Y");
+    month = now.strftime("%m");
+    day = now.strftime("%d");
+
     folder = os.path.join(
         "audio",
-        now.strftime("%Y"),
-        now.strftime("%m"),
-        now.strftime("%d")
+        year,
+        month,
+        day
     )
 
-    # create folders if not exist
     os.makedirs(folder, exist_ok=True)
 
     filename = now.strftime("%Y%m%d_%H%M%S_%f") + ".mp3"
     full_path = os.path.join(folder, filename)
+    audio_url = f"audio/{year}/{month}/{day}/{filename}"
 
-    return full_path
+    return full_path, audio_url, filename
 # -------- FUNCTION TTS --------
 def convert_text_to_speech(text: str, lang: str | None, speed: float | None, base_url: str):
     # Auto-detect language nếu lang = None hoặc chuỗi rỗng
@@ -71,7 +74,8 @@ def convert_text_to_speech(text: str, lang: str | None, speed: float | None, bas
     if speed <= 0:
         speed = 1.0
 
-    filepath = generate_audio_path(filename)
+    filepath, audio_url, filename = generate_audio_path()
+
 
     # Tạo audio bằng gTTS (không có tham số speed)
     tts = gTTS(text=text, lang=lang, slow=False)
@@ -95,7 +99,7 @@ def convert_text_to_speech(text: str, lang: str | None, speed: float | None, bas
 
     return {
         "detected_language": lang,
-        "audio_url": f"/audio/{filename}"
+        "audio_url": f"{audio_url}"
     }
 
 
