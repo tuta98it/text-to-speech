@@ -6,6 +6,9 @@ from langdetect import detect
 import uuid, re, os
 from langdetect import detect
 import subprocess
+from datetime import datetime
+import os
+
 app = FastAPI()
 
 # Serve static files
@@ -29,7 +32,25 @@ class TextItem(BaseModel):
 class TTSRequest(BaseModel):
     texts: list[TextItem]
 
+# -------- FUNCTION GENERATE AUDIO PATH --------
+def generate_audio_path():
+    now = datetime.now()
 
+    # folder structure: audio/YYYY/MM/DD/
+    folder = os.path.join(
+        "audio",
+        now.strftime("%Y"),
+        now.strftime("%m"),
+        now.strftime("%d")
+    )
+
+    # create folders if not exist
+    os.makedirs(folder, exist_ok=True)
+
+    filename = now.strftime("%Y%m%d_%H%M%S_%f") + ".mp3"
+    full_path = os.path.join(folder, filename)
+
+    return full_path
 # -------- FUNCTION TTS --------
 def convert_text_to_speech(text: str, lang: str | None, speed: float | None, base_url: str):
     # Auto-detect language nếu lang = None hoặc chuỗi rỗng
@@ -50,8 +71,7 @@ def convert_text_to_speech(text: str, lang: str | None, speed: float | None, bas
     if speed <= 0:
         speed = 1.0
 
-    filename = f"{uuid.uuid4()}.mp3"
-    filepath = os.path.join("audio", filename)
+    filepath = generate_audio_path(filename)
 
     # Tạo audio bằng gTTS (không có tham số speed)
     tts = gTTS(text=text, lang=lang, slow=False)
