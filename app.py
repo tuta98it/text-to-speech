@@ -75,7 +75,7 @@ def convert_text_to_speech(text: str, lang: str | None, speed: float | None, bas
 
     return {
         "detected_language": lang,
-        "audio_url": f"{base_url}/audio/{filename}"
+        "audio_url": f"/audio/{filename}"
     }
 
 
