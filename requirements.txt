@@ -3,4 +3,6 @@ uvicorn
 gtts
 langdetect
 datetime
+google-cloud-texttospeech
+google-au
 protobuf==3.13.*

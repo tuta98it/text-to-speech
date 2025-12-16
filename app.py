@@ -4,11 +4,9 @@ from pydantic import BaseModel
 from gtts import gTTS
 from langdetect import detect
 import uuid, re, os
-from langdetect import detect
 import subprocess
 from datetime import datetime
-import os
-
+from google.cloud import texttospeech
 app = FastAPI()
 
 # Serve static files
@@ -29,8 +27,17 @@ class TextItem(BaseModel):
     speed: float | None = 1.0 # tốc độ phát âm (0.5 - 2.0)
 
 
+class TextItemCGTTS(BaseModel):
+    text: str
+    lang: str | None = None
+    speed: float | None = 1.0
+    gender: str | None = "female"  # male | female
+
 class TTSRequest(BaseModel):
     texts: list[TextItem]
+
+class TTSRequestCGTTS(BaseModel):
+    texts: list[TextItemCGTTS]
 
 # -------- FUNCTION GENERATE AUDIO PATH --------
 def generate_audio_path():
@@ -102,6 +109,55 @@ def convert_text_to_speech(text: str, lang: str | None, speed: float | None, bas
         "audio_url": f"{audio_url}"
     }
 
+def cgtts_convert_text_to_speech(text: str, lang: str | None, speed: float | None, gender: str | None):
+    if not lang:
+        lang = detect(text)
+
+    if lang == "vi":
+        language_code = "vi-VN"
+        voice_name = "vi-VN-Wavenet-A" if gender == "female" else "vi-VN-Wavenet-B"
+    else:
+        language_code = "en-US"
+        voice_name = "en-US-Wavenet-D"
+
+    if not speed or speed <= 0:
+        speed = 1.0
+
+    filepath, audio_url, filename = generate_audio_path()
+
+    client = texttospeech.TextToSpeechClient()
+
+    synthesis_input = texttospeech.SynthesisInput(text=text)
+
+    voice = texttospeech.VoiceSelectionParams(
+        language_code=language_code,
+        name=voice_name,
+        ssml_gender=(
+            texttospeech.SsmlVoiceGender.FEMALE
+            if gender == "female"
+            else texttospeech.SsmlVoiceGender.MALE
+        ),
+    )
+
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.MP3,
+        speaking_rate=speed,
+    )
+
+    response = client.synthesize_speech(
+        input=synthesis_input,
+        voice=voice,
+        audio_config=audio_config,
+    )
+
+    with open(filepath, "wb") as out:
+        out.write(response.audio_content)
+
+    return {
+        "language": language_code,
+        "voice": voice_name,
+        "audio_url": audio_url
+    }
 
 # -------- ROUTE API --------
 @app.post("/tts")
@@ -116,6 +172,22 @@ async def text_to_speech(req: TTSRequest, request: Request):
 
     for item in req.texts:
         result = convert_text_to_speech(item.text, item.lang, item.speed, base_url)
+        results.append(result)
+
+    return {"results": results}
+
+
+@app.post("/cgtts")
+async def cgtts_text_to_speech(req: TTSRequestCGTTS):
+
+    results = []
+    for item in req.texts:
+        result = cgtts_convert_text_to_speech(
+            item.text,
+            item.lang,
+            item.speed,
+            item.gender
+        )
         results.append(result)
 
     return {"results": results}
