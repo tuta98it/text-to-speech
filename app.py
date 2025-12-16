@@ -115,10 +115,10 @@ def cgtts_convert_text_to_speech(text: str, lang: str | None, speed: float | Non
 
     if lang == "vi":
         language_code = "vi-VN"
-        voice_name = "vi-VN-Wavenet-A" if gender == "female" else "vi-VN-Wavenet-B"
+        voice_name = "vi-VN-Standard-A" if gender == "female" else "vi-VN-Standard-B"
     else:
         language_code = "en-US"
-        voice_name = "en-US-Wavenet-D"
+        voice_name = "en-US-Standard-D"
 
     if not speed or speed <= 0:
         speed = 1.0
