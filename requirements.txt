@@ -4,5 +4,5 @@ gtts
 langdetect
 datetime
 google-cloud-texttospeech
-google-au
+google-auth
 protobuf==3.13.*
